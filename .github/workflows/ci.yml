@@ -21,20 +21,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-
+          cache: "uv"
 
       - name: Install dependencies
         run: uv sync --dev
 
+      - name: Install nbstripout
+        run: pip Install nbstripout
+
+      - name: Analyzes Notebooks
+        run: |
+          nbstripout --verify .ipynb || (echo "Erro: Notebooks com outputs, limpe antes de commitar" && exit code 1)
 
       - name: Run Ruff
         run: uv run ruff check .
