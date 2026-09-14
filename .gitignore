@@ -25,3 +25,6 @@ __pycache__/
 
 # Python command history
 uv_comands.md
+
+# Local presentation generator
+docs/gerar_apresentacao.py
