@@ -1,35 +1,27 @@
 import time
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import RedirectResponse
 from prometheus_client import Counter, Histogram, make_asgi_app
 
 from src.api.model import load_model
 from src.api.schemas import (
+    LOW_CONFIDENCE_THRESHOLD,
     PredictionRequest,
     PredictionResponse,
 )
-
-CONDITION_NAMES = {
-    1: "neoplasms",
-    2: "digestive system diseases",
-    3: "nervous system diseases",
-    4: "cardiovascular diseases",
-    5: "general pathological conditions",
-}
+from src.data.loader import load_condition_names
 
 app = FastAPI(
     title="Medical Triage API",
     description=(
         "API para classificação de textos médicos "
-        "utilizando um modelo NLP."
+        "utilizando um modelo NLP. Apoio à triagem; "
+        "não substitui avaliação clínica."
     ),
     version="1.0.0",
 )
 
-
-# -------------------------------------------------------------------
-# Métricas Prometheus
-# -------------------------------------------------------------------
 
 REQUEST_COUNT = Counter(
     "http_requests_total",
@@ -49,27 +41,18 @@ ERROR_COUNT = Counter(
     ["endpoint"],
 )
 
-
-# -------------------------------------------------------------------
-# Carregamento do modelo
-# -------------------------------------------------------------------
-
 model = load_model()
+condition_names = load_condition_names()
 
 
-# -------------------------------------------------------------------
-# Endpoints
-# health => Verifica se a API está funcionando.
-# predict => Classifica o texto recebido.
-# metrics => Exibe as métricas Prometheus.
-# -------------------------------------------------------------------
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/docs")
+
 
 @app.get("/health")
 def health():
-    """
-        Endpoint de saúde da API.
-        Retorna o status da API e se o modelo foi carregado com sucesso.
-    """
+    """Retorna o status da API e se o modelo foi carregado."""
 
     return {
         "status": "healthy",
@@ -79,19 +62,14 @@ def health():
 
 @app.post("/predict", response_model=PredictionResponse)
 def predict(request: PredictionRequest):
-    """
-        Endpoint de previsão de classificação.
-        Recebe um texto médico e retorna a classificação prevista
-        e a confiança do modelo.
-    """
+    """Classifica um texto médico e devolve rótulo, nome e confiança."""
     start_time = time.perf_counter()
 
     try:
         prediction = int(model.predict([request.text])[0])
         probabilities = model.predict_proba([request.text])[0]
         confidence = float(max(probabilities))
-
-        condition_name = CONDITION_NAMES.get(
+        condition_name = condition_names.get(
             prediction,
             "unknown condition",
         )
@@ -103,8 +81,10 @@ def predict(request: PredictionRequest):
         ).inc()
 
         return PredictionResponse(
+            condition_label=prediction,
             condition_name=condition_name,
             confidence=confidence,
+            low_confidence=confidence < LOW_CONFIDENCE_THRESHOLD,
         )
 
     except Exception as exc:
@@ -126,10 +106,6 @@ def predict(request: PredictionRequest):
             endpoint="/predict",
         ).observe(elapsed)
 
-
-# -------------------------------------------------------------------
-# Endpoint de métricas
-# -------------------------------------------------------------------
 
 metrics_app = make_asgi_app()
 

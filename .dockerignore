@@ -10,11 +10,13 @@ __pycache__/
 *.pyo
 
 .pytest_cache/
+.ruff_cache/
 .coverage
 htmlcov/
 
-data/
-*.csv
+data/raw/medical_tc_train.csv
+data/raw/medical_tc_test.csv
+data/processed/
 *.xlsx
 *.parquet
 

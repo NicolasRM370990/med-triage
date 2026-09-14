@@ -1,5 +1,16 @@
+import os
+
+import uvicorn
+
+
 def main():
-    print("Hello from med-triage!")
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(
+        "src.api.main:app",
+        host=host,
+        port=port,
+    )
 
 
 if __name__ == "__main__":

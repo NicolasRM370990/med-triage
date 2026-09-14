@@ -1,9 +1,9 @@
 [project]
 name = "med-triage"
 version = "0.1.0"
-description = "Add your description here"
+description = "API de classificação de abstracts médicos para apoio à triagem."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "fastapi>=0.141.1",
     "joblib>=1.5.3",
@@ -13,10 +13,27 @@ dependencies = [
     "uvicorn[standard]>=0.52.4",
 ]
 
+[project.scripts]
+med-triage = "main:main"
+
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
-    "httpx2>=2.12.0",
+    "httpx2>=2.13.0",
     "pytest>=9.1.1",
     "ruff>=0.16.5",
 ]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+exclude = ["docs", ".venv"]

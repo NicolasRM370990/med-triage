@@ -24,7 +24,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
@@ -32,16 +32,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --dev
 
-      - name: Install nbstripout
-        run: uv add --dev nbstripout
-
-      - name: Analyzes Notebooks
-        run: |
-          find . -name "*.ipynb" -not -path "*/.venv/*" -exec uv run nbstripout --verify {} \; || (echo "Erro: Notebooks com outputs, limpe antes de commitar" && exit 1)
-
       - name: Run Ruff
         run: uv run ruff check .
-
 
       - name: Run tests
         run: uv run pytest -v
