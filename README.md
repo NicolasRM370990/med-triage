@@ -64,6 +64,7 @@ A solução é composta pelos seguintes componentes:
                          ┌─────────────────────┐
                          │      FastAPI        │
                          │                     │
+                         │ /                   │
                          │ /predict            │
                          │ /health             │
                          │ /metrics            │
@@ -168,13 +169,14 @@ Condition name
 
 ## TF-IDF
 
-A representação textual utiliza:
+A representação textual é criada por `src/features/tfidf.create_vectorizer()` e reutilizada no treino:
 
 - conversão para lowercase;
 - remoção de stop words em inglês;
 - unigramas e bigramas;
 - `min_df=2`;
-- `max_df=0.95`.
+- `max_df=0.95`;
+- `sublinear_tf=True`.
 
 Configuração:
 
@@ -185,6 +187,7 @@ TfidfVectorizer(
     ngram_range=(1, 2),
     min_df=2,
     max_df=0.95,
+    sublinear_tf=True,
 )
 ```
 
@@ -194,7 +197,8 @@ O classificador utilizado é:
 
 ```python
 LogisticRegression(
-    max_iter=1000,
+    max_iter=2000,
+    class_weight="balanced",
     random_state=42,
 )
 ```
@@ -203,6 +207,7 @@ O modelo completo é persistido como:
 
 ```text
 models/baseline/models.joblib
+models/baseline/metrics.json
 ```
 
 ---
@@ -223,13 +228,14 @@ O pipeline:
 4. treina o modelo;
 5. carrega o conjunto de teste;
 6. realiza as previsões;
-7. calcula as métricas;
-8. salva o modelo treinado.
+7. calcula as métricas, o classification report e a matriz de confusão;
+8. salva o modelo treinado e as métricas.
 
-O modelo final é salvo em:
+Artefatos:
 
 ```text
 models/baseline/models.joblib
+models/baseline/metrics.json
 ```
 
 ---
@@ -249,14 +255,14 @@ As métricas utilizadas são:
 
 ### Resultado do baseline
 
-Em uma das execuções do modelo baseline:
+Hold-out oficial (`medical_tc_test.csv`), registrado em `models/baseline/metrics.json`:
 
 | Métrica | Resultado |
 |---|---:|
-| Accuracy | 0.5467 |
-| Precision Macro | 0.5529 |
-| Recall Macro | 0.5161 |
-| F1 Macro | 0.5286 |
+| Accuracy | 0.5873 |
+| Precision Macro | 0.5724 |
+| Recall Macro | 0.6286 |
+| F1 Macro | 0.5884 |
 
 Os resultados devem ser interpretados como métricas experimentais do modelo acadêmico e não como indicadores de desempenho clínico.
 
@@ -288,6 +294,7 @@ http://localhost:8000/docs
 
 | Método | Endpoint | Descrição |
 |---|---|---|
+| GET | `/` | Redirect para `/docs` |
 | GET | `/health` | Verifica a saúde da aplicação |
 | POST | `/predict` | Classifica um texto médico |
 | GET | `/metrics` | Expõe métricas para Prometheus |
@@ -315,14 +322,17 @@ Body:
 
 ```json
 {
+  "condition_label": 5,
   "condition_name": "general pathological conditions",
-  "confidence": 0.6747
+  "confidence": 0.3013,
+  "low_confidence": true
 }
 ```
 
-O campo `condition_name` é obtido a partir da classe prevista pelo modelo.
-
-O campo `confidence` representa a maior probabilidade estimada pelo classificador para a classe escolhida.
+- `condition_label`: classe numérica prevista pelo modelo (1 a 5).
+- `condition_name`: nome legível lido de `data/raw/medical_tc_labels.csv`.
+- `confidence`: maior probabilidade estimada pelo classificador (entre 0 e 1).
+- `low_confidence`: `true` quando `confidence` é menor que 0,5.
 
 ### Mapeamento das classes
 
