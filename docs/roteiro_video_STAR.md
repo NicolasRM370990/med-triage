@@ -9,50 +9,48 @@
 
 ## Antes de gravar
 
-- Abrir o PPT no slide 1.
+- Abrir o PPT no slide 1 (equipe visível).
 - Ter um exemplo de `POST /predict` em mente (dor no peito / falta de ar).
 - Não vender o modelo como diagnóstico. É **apoio à triagem de texto**.
-- Números do último treino (`models/baseline/metrics.json`): accuracy **0,587**, F1 macro **0,588**, recall macro **0,629**.
+- Números em `models/baseline/metrics.json`: accuracy **0,587**, precision macro **0,572**, recall macro **0,629**, F1 macro **0,588**.
 
 ---
 
-## 0:00–0:20 · Abertura (slide 1)
+## 0:00–0:25 · Abertura (slide 1)
 
 **Fala**
 
-Olá. Este é o **Med-Triage**: um serviço que lê um abstract médico em inglês e devolve uma de cinco categorias clínicas, com score de confiança e um aviso quando essa confiança fica baixa.
-
-Não é um notebook isolado. O objetivo foi sair do CSV e chegar em uma **API pronta para operação**, com testes, container e esteira de entrega.
+Olá. Este é o Med-Triage: um serviço que lê um abstract médico em inglês e devolve uma de cinco categorias clínicas, com score de confiança e um aviso quando essa confiança fica baixa. O objetivo foi sair do CSV e chegar em um fluxo de MLOps: API, Docker, Grafana e retreino no Airflow.
 
 ---
 
-## 0:20–0:35 · Agenda STAR (slide 2)
+## 0:25–0:40 · Agenda STAR (slide 2)
 
 **Fala**
 
-Vou contar o projeto no modelo **STAR**: o cenário, a tarefa, o que implementamos de fato, e o resultado — incluindo o que ainda não está maduro.
+Vou contar o projeto no modelo **STAR**: o cenário, a tarefa, o que implementamos, e o resultado — incluindo o limite do modelo.
 
 ---
 
-## S — Situation · 0:35–1:40 (slides 3 e 4)
+## S — Situation · 0:40–1:40 (slides 3 e 4)
 
-### 0:35–1:15 · O problema (slide 3)
+### 0:40–1:15 · O problema (slide 3)
 
 **Fala**
 
 A literatura biomédica cresce mais rápido do que qualquer equipe consegue ler. Abstracts descrevem a condição do paciente, e quem faz triagem precisa de um **primeiro filtro padronizado**.
 
-O corpus trabalha com cinco grupos: neoplasias, doenças do sistema digestivo, do sistema nervoso, cardiovasculares e condições patológicas gerais.
+O corpus trabalha com cinco grupos: neoplasias, doenças do sistema digestivo, do sistema nervoso, cardiovasculares e condições patológicas gerais. Essas classes **não** são níveis de urgência.
 
-O valor de negócio só aparece se esse classificador **chegar em produção**: contrato de API, saúde do serviço e alguma observabilidade. Um modelo no disco, sozinho, não resolve o fluxo. E isto **não substitui** avaliação clínica.
+O valor só aparece se o classificador **chegar em produção**. E isto **não substitui** avaliação clínica.
 
 ### 1:15–1:40 · Os dados (slide 4)
 
 **Fala**
 
-Usamos o **Medical Abstracts TC Corpus**: **11.550** textos de treino e **2.888** de teste. Zero nulos, zero duplicados. Colunas simples: rótulo e abstract.
+Usamos o **Medical Abstracts TC Corpus**: **11.550** textos de treino e **2.888** de teste. Zero nulos, zero duplicados.
 
-O ponto crítico é o **desbalanceamento**. A classe “general pathological conditions” tem cerca de **um terço** dos exemplos. Digestive system, a menor, fica perto de **dez por cento**. Qualquer métrica só de acurácia mascara isso. Por isso o norte é **F1 macro**.
+O ponto crítico é o **desbalanceamento**. A classe “general pathological conditions” tem cerca de **um terço** dos exemplos. Digestive system fica perto de **dez por cento**. Por isso o norte é **F1 macro**.
 
 ---
 
@@ -60,11 +58,9 @@ O ponto crítico é o **desbalanceamento**. A classe “general pathological con
 
 **Fala**
 
-A tarefa era fechar um **MVP de ponta a ponta**.
+A tarefa era um **MVP de ponta a ponta**: explorar o corpus, treinar um baseline reproduzível, servir o modelo por API e **operar** — Python 3.12, Compose com monitoramento e Airflow, CI/CD.
 
-Primeiro, explorar o corpus. Depois, treinar um baseline reproduzível de NLP clássico e avaliar no hold-out oficial. Em seguida, **servir** o modelo: texto entra; rótulo, nome da condição e confiança saem. Por último, **operar**: Python 3.12 alinhado, Docker, testes, CI/CD e métricas.
-
-Recorte consciente: não era o melhor paper de embeddings biomédicos. Era um produto mínimo, auditável, que outra pessoa consegue subir.
+Não era o melhor paper de embeddings. Era um produto auditável, que outra pessoa consegue subir com `docker compose up`.
 
 ---
 
@@ -74,21 +70,17 @@ Recorte consciente: não era o melhor paper de embeddings biomédicos. Era um pr
 
 **Fala**
 
-O repositório segue um mapa de **MLOps**: `data/raw`, `src`, `models`, `tests`, Docker e workflows no GitHub.
+O repositório segue um mapa de **MLOps**. O código vive em **`src/`**. O retreino está em **`dags/`**. O Compose sobe API, Prometheus, Grafana, Postgres e Airflow.
 
-O caminho real está em **`src/`**: loader, vetorizador TF-IDF, treino e API FastAPI. Os testes vivos cobrem o contrato da API. README, Makefile e `.env.example` já descrevem o setup.
-
-Pastas como `monitoring/`, `airflow/` e `notebooks/` ainda são **esqueleto**. Vale ser honesto: a intenção de plataforma está no mapa; a implementação está concentrada no serviço de inferência.
+O fluxo é contínuo: o CSV em `data/raw` treina o modelo; a DAG grava `models.joblib` e `metrics.json`; a API responde em `/predict`; o Prometheus coleta `/metrics` e o Grafana mostra o dashboard.
 
 ### 2:45–3:20 · Modelo (slide 7)
 
 **Fala**
 
-O baseline é um **pipeline scikit-learn**: TF-IDF com unigramas e bigramas, stopwords em inglês, `sublinear_tf`, e **regressão logística** com `class_weight` balanceado. Vetor e classificador viajam no mesmo `joblib`. Isso simplifica o deploy: a API carrega um arquivo só.
+O baseline é **TF-IDF** via `create_vectorizer()` — unigramas, bigramas e `sublinear_tf` — mais **regressão logística com class_weight balanceado**. Vetor e classificador viajam no mesmo `joblib`. As funções de treino e avaliação são as mesmas do script local e da DAG.
 
-Avaliamos accuracy, precision, recall, F1 macro e matriz de confusão. As métricas também vão para `metrics.json`. Escolhemos esse stack porque é rápido, interpretável e suficiente para validar o fluxo até o endpoint.
-
-O módulo `src/features/tfidf.py` **é** o que o treino usa. Sem atalho duplicado no script.
+Avaliamos accuracy, precision, recall e F1 macro no hold-out oficial e gravamos o resultado em **metrics.json**.
 
 ### 3:20–3:50 · API (slide 8)
 
@@ -96,19 +88,13 @@ O módulo `src/features/tfidf.py` **é** o que o treino usa. Sem atalho duplicad
 
 A API tem **`/`** redirecionando para o Swagger, **`/health`**, **`/predict`** e **`/metrics`**.
 
-O contrato é simples. Entra `text`. Sai o rótulo numérico, o nome da condição, a confiança entre 0 e 1, e `low_confidence` quando o score fica abaixo de **0,5**. Texto vazio ou payload incompleto retorna **422**. A latência de `/predict` vai para o Prometheus.
-
-Os nomes vêm do CSV de labels, não de um dicionário hardcoded. O modelo carrega na subida: se o artefato não existe, o serviço falha cedo.
-
-Num teste com dor no peito e falta de ar, o ponto a observar é se a confiança dispara o aviso — a classe genérica ainda absorve casos ambíguos.
+Entra `text`. Sai rótulo, nome da condição, confiança e `low_confidence` abaixo de **0,5**. Texto vazio retorna **422**. Os nomes vêm do CSV de labels. O modelo carrega na subida: se o artefato não existe, o serviço falha cedo. No exemplo de dor no peito do README, a confiança fica perto de **0,30** e o aviso dispara.
 
 ### 3:50–4:15 · MLOps (slide 9)
 
 **Fala**
 
-Do lado de engenharia: **sete testes** de contrato passam; o CI roda Ruff e pytest em **Python 3.12**, a mesma versão do `pyproject` e da imagem Docker. A imagem usa **uv**, copia código, modelo e labels. O Compose sobe a API na porta 8000 com healthcheck. No push para `main`, o CD publica no **GitHub Container Registry** com a tag do commit.
-
-A esteira básica existe. O que ainda não sobe no Compose é Grafana. O treino continua sendo um script local, não um job orquestrado.
+O runtime é **Python 3.12** no projeto, no CI e na imagem. O quality gate roda Ruff. Grafana em **:3000** mostra requisições, latência e erro. Airflow em **:8080** agenda o retreino **semanal**. Push em `main` publica a imagem no GHCR.
 
 ---
 
@@ -118,23 +104,23 @@ A esteira básica existe. O que ainda não sobe no Compose é Grafana. O treino 
 
 **Fala**
 
-**Resultado.** Temos um fluxo completo: dado, treino, artefato, API, teste e imagem.
+**Resultado.** O fluxo existe: dado, treino, `models.joblib`, `metrics.json`, API, dashboard e orquestração.
 
-Os números do modelo, no hold-out oficial, são modestos: accuracy **0,59** e F1 macro **0,59**, com recall macro um pouco acima, **0,63**. Para triagem clínica real, isso **não basta**. Para um desafio de produto, prova que o caminho existe e que o balanceamento já puxou o recall.
+Os números do hold-out: accuracy **0,59**, F1 macro **0,59**, recall macro **0,63** — o balanceamento puxou o recall. Para triagem clínica real, **ainda não basta**. Para o desafio, a plataforma está de pé.
 
-O que já funciona bem é o contrato da API, o fail-fast do modelo e a base de observabilidade. O que ainda é placeholder é dashboard, orquestração e testes do pipeline de treino.
+O que já funciona é o contrato da API e a plataforma. O que limita o produto é o próprio classificador.
 
 ### 4:40–4:55 · Próximos passos (slide 11)
 
 **Fala**
 
-Próximo salto, nesta ordem: **melhorar o modelo** — embeddings biomédicos ou threshold por classe; ligar Prometheus e Grafana de verdade; travar métricas no CI; e deixar explícito, sempre, que isto **apoia triagem, não substitui o clínico**.
+Próximo salto: **melhorar o modelo** — embeddings ou threshold por classe — recarregar a API depois da DAG, alertar no Grafana e manter o disclaimer clínico.
 
 ### 4:55–5:00 · Fechamento (slide 12)
 
 **Fala**
 
-Em uma frase: saímos do corpus e chegamos no endpoint. O Med-Triage já classifica, devolve confiança e nasce com testes e CD. O próximo capítulo é qualidade do modelo e observabilidade visual.
+Saímos do corpus e chegamos no endpoint, com monitoramento e retreino. O Med-Triage já opera; o próximo capítulo é qualidade do modelo.
 
 Obrigado. Fico à disposição para perguntas.
 
@@ -144,25 +130,25 @@ Obrigado. Fico à disposição para perguntas.
 
 | Bloco        | Relógio     | Slide | Segundos |
 |--------------|-------------|-------|----------|
-| Abertura     | 0:00–0:20   | 1     | 20       |
-| Agenda       | 0:20–0:35   | 2     | 15       |
-| Situation    | 0:35–1:40   | 3–4   | 65       |
+| Abertura     | 0:00–0:25   | 1     | 25       |
+| Agenda       | 0:25–0:40   | 2     | 15       |
+| Situation    | 0:40–1:40   | 3–4   | 60       |
 | Task         | 1:40–2:10   | 5     | 30       |
 | Action       | 2:10–4:15   | 6–9   | 125      |
 | Result       | 4:15–5:00   | 10–12 | 45       |
 | **Total**    |             |       | **300**  |
 
-Se ultrapassar 5 minutos, corte nesta ordem: detalhes do Compose, lista de pastas vazias, e o exemplo numérico da predição. Não corte Situation (desbalanceamento) nem Result (F1 e disclaimer clínico).
+Se ultrapassar 5 minutos, corte detalhes de portas do Compose. Não corte Situation (desbalanceamento) nem Result (F1 e disclaimer).
 
 ---
 
 ## Cortes se faltar fôlego (versão 3 min 30 s)
 
-1. Abertura + STAR (20 s)  
-2. Situation: problema + 5 classes + desbalanceamento (50 s)  
+1. Abertura com equipe + STAR (25 s)  
+2. Situation: problema + 5 classes + desbalanceamento (45 s)  
 3. Task: quatro entregas (20 s)  
-4. Action: pipeline + endpoints + CI/CD 3.12 (70 s)  
-5. Result: F1 ~0,59, 7 testes, próximo passo modelo + Grafana (50 s)
+4. Action: pipeline + API + Compose/Airflow (70 s)  
+5. Result: F1 ~0,59, plataforma pronta, próximo passo é o modelo (50 s)
 
 ---
 
@@ -170,4 +156,4 @@ Se ultrapassar 5 minutos, corte nesta ordem: detalhes do Compose, lista de pasta
 
 - **“Por que não BERT?”** — Baseline primeiro: artefato único, treino barato, API simples. Transformer entra quando o F1 macro do clássico saturar.  
 - **“Dá para usar em hospital?”** — Não como decisão clínica. Só como filtro de texto, com humano no loop e com o flag de baixa confiança.  
-- **“O que eu faria amanhã?”** — Subir o modelo (embeddings ou threshold por classe) e um dashboard Prometheus/Grafana. A esteira 3.12 já está alinhada.
+- **“O que fariam amanhã?”** — Subir o modelo (embeddings ou threshold por classe) e fechar o loop: DAG gera artefato, API passa a usar o novo joblib com alerta no Grafana.
